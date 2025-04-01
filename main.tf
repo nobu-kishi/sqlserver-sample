@@ -40,6 +40,7 @@ data "aws_kms_key" "performance" {
   key_id = "alias/aws/rds" # または別の指定されたキーがあれば適宜変更
 }
 
+# https://docs.aws.amazon.com/ja_jp/AmazonRDS/latest/UserGuide/SQLServer.Procedural.Importing.Native.Enabling.html
 resource "aws_iam_role" "rds_backup_restore_role" {
   name = "rds-backup-restore-role"
 
@@ -55,9 +56,33 @@ resource "aws_iam_role" "rds_backup_restore_role" {
   })
 }
 
+resource "aws_iam_policy" "rds_backup_restore_policy" {
+  name        = "rds-backup-restore-policy"
+  description = "Policy for RDS to access S3 for backup/restore"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation",
+          "s3:GetObjectAttributes",
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:ListMultipartUploadParts",
+          "s3:AbortMultipartUpload"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "rds_backup_restore_attach" {
   role       = aws_iam_role.rds_backup_restore_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonRDSBackupRestore"
+  policy_arn = aws_iam_policy.rds_backup_restore_policy.arn
 }
 
 resource "aws_db_option_group" "sqlserver_backup_restore" {
