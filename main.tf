@@ -40,7 +40,41 @@ data "aws_kms_key" "performance" {
   key_id = "alias/aws/rds" # または別の指定されたキーがあれば適宜変更
 }
 
+resource "aws_iam_role" "rds_backup_restore_role" {
+  name = "rds-backup-restore-role"
 
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = {
+        Service = "rds.amazonaws.com"
+      },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "rds_backup_restore_attach" {
+  role       = aws_iam_role.rds_backup_restore_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonRDSBackupRestore"
+}
+
+resource "aws_db_option_group" "sqlserver_backup_restore" {
+  name                     = "sqlserver-backup-restore-og"
+  engine_name              = var.sqlserver_config.engine
+  major_engine_version     = "16.00"
+  option_group_description = "Option group for SQL Server backup and restore"
+
+  option {
+    option_name = "SQLSERVER_BACKUP_RESTORE"
+
+    option_settings {
+      name  = "IAM_ROLE_ARN"
+      value = aws_iam_role.rds_backup_restore_role.arn
+    }
+  }
+}
 
 resource "aws_db_instance" "sqlserver" {
   identifier                    = var.sqlserver_config.identifier
@@ -70,6 +104,7 @@ resource "aws_db_instance" "sqlserver" {
   network_type                    = "IPV4"
   monitoring_interval             = 0
   vpc_security_group_ids = [ aws_security_group.db_sg.id ]
+  option_group_name = aws_db_option_group.sqlserver_backup_restore.name
 }
 
 resource "aws_security_group" "db_sg" {
